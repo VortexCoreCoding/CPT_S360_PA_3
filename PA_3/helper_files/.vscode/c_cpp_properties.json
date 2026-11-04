@@ -5,18 +5,20 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "/usr/include/**",
-                "/usr/src/linux-headers-**/include",
-                "/lib/modules/5.4.0-216-generic/build/include",
-                "/lib/modules/5.4.0-216-generic/build/include/uapi",
-                "/lib/modules/5.4.0-216-generic/build/include/generated",
-                "/lib/modules/5.4.0-216-generic/build/include/generated/uapi",
-                "/lib/modules/5.4.0-216-generic/build/arch/x86/include",
-                "/lib/modules/5.4.0-216-generic/build/arch/x86/include/uapi",
-                "/lib/modules/5.4.0-216-generic/build/arch/x86/include/generated",
-                "/lib/modules/5.4.0-216-generic/build/arch/x86/include/generated/uapi"
+                "/usr/src/linux-headers-5.6.19-050619/include",
+                "/usr/src/linux-headers-5.6.19-050619/include/uapi",
+                "/usr/src/linux-headers-5.6.19-050619-generic/include",
+                "/usr/src/linux-headers-5.6.19-050619-generic/include/uapi",
+                "/usr/src/linux-headers-5.6.19-050619-generic/include/generated",
+                "/usr/src/linux-headers-5.6.19-050619-generic/include/generated/uapi",
+                "/usr/src/linux-headers-5.6.19-050619-generic/arch/x86/include",
+                "/usr/src/linux-headers-5.6.19-050619-generic/arch/x86/include/uapi",
+                "/usr/src/linux-headers-5.6.19-050619-generic/arch/x86/include/generated",
+                "/usr/src/linux-headers-5.6.19-050619-generic/arch/x86/include/generated/uapi"
             ],
             "defines": [
                 "__KERNEL__",
+                "MODULE",
                 "KBUILD_MODNAME=\"kmlab\""
             ],
             "compilerPath": "/usr/bin/gcc",

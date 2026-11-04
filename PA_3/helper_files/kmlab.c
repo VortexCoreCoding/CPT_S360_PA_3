@@ -1,10 +1,9 @@
 #define LINUX
 
 #include <linux/module.h>
+#include <linux/proc_fs.h>
 #include <linux/kernel.h>
 #include "kmlab_given.h"
-// Include headers as needed ...
-
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Spinali"); // Change with your lastname
@@ -21,6 +20,16 @@ typedef struct {
 
 // Global variables as needed ...
 struct proc_dir_entry *kmlab_dir;
+struct proc_dir_entry *status_dir;
+
+static ssize_t read_status(struct file *file_pointer, char __user *buffer,
+                             size_t buffer_length, loff_t *offset) {
+   return 1;
+}
+
+static const struct proc_ops status_access_ops = {
+   .proc_read = read_status,
+};
 
 // kmlab_init - Called when the module is loaded
 int __init kmlab_init(void)
@@ -34,6 +43,7 @@ int __init kmlab_init(void)
    if (!kmlab_dir) {
     return -ENOMEM;
    }
+   status_dir = proc_create("status", 0666, kmlab_dir, &status_access_ops); // TODO: make custom proc ops
    
    pr_info("KMLAB MODULE LOADED\n");
    return 0;   
