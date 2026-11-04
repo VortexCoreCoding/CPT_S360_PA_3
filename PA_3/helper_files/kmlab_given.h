@@ -3,7 +3,6 @@
 
 #include <linux/pid.h>
 #include <linux/sched.h>
-#include <stdio.h>
 
 #define find_task_by_pid(nr) pid_task(find_vpid(nr), PIDTYPE_PID)
 
