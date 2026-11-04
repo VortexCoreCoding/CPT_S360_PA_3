@@ -7,8 +7,8 @@
 
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Cougs"); // Change with your lastname
-MODULE_DESCRIPTION("CPTS360 KM PA");
+MODULE_AUTHOR("Spinali"); // Change with your lastname
+MODULE_DESCRIPTION("CPTS360 PA_3 - KM");
 
 #define DEBUG 1
 
@@ -20,7 +20,7 @@ typedef struct {
 } proc_list;
 
 // Global variables as needed ...
-
+struct proc_dir_entry *kmlab_dir;
 
 // kmlab_init - Called when the module is loaded
 int __init kmlab_init(void)
@@ -29,8 +29,11 @@ int __init kmlab_init(void)
    pr_info("KMLAB MODULE LOADING\n");
    #endif
    // Insert your code here ...
-   
-   
+   // printk("Hello World! Module loaded successfully");
+   kmlab_dir = proc_mkdir("kmlab", NULL);
+   if (!kmlab_dir) {
+    return -ENOMEM;
+   }
    
    pr_info("KMLAB MODULE LOADED\n");
    return 0;   
@@ -43,7 +46,7 @@ void __exit kmlab_exit(void)
    pr_info("KMLAB MODULE UNLOADING\n");
    #endif
    // Insert your code here ...
-   
+   // printk("Module unloaded successfully");
    
 
    pr_info("KMLAB MODULE UNLOADED\n");
