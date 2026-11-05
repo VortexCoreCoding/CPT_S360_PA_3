@@ -1,3 +1,7 @@
+// Programmer: Logan Spinali
+// PA 3 - Kernel Module
+// This .c file defines the kernel-side implementation of the PA
+
 #define LINUX
 
 #include <linux/module.h>
@@ -58,12 +62,13 @@ static void print_list(struct list_head *head) {
 
 // Loops through the list of nodes and increases the cpu time by the cpu use calculator in kmlab_given.h
 static void update_list_cpu_time(struct list_head* p_head) {
-   if (list_empty(p_head)) {
-      return;
-   }
    proc_node *node;
    proc_node *next;
    mutex_lock(&list_access_lock);
+   if (list_empty(p_head)) {
+      mutex_unlock(&list_access_lock);
+      return;
+   }
    list_for_each_entry_safe(node, next, p_head, list) {
       if (get_cpu_use(node->pid, &node->cpu_time)) {
          // remove a process if its id is not present or finished

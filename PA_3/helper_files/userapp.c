@@ -1,10 +1,9 @@
+// The userspace test side of the module, runs a fibonacci function for a maximum of 15 seconds
 #include "userapp.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <time.h>
-// Additional headers as needed
-
 
 // Register process with kernel module
 void register_process(unsigned int pid)
@@ -22,6 +21,9 @@ int main(int argc, char* argv[])
 {
     int __expire = 10;
     time_t start_time = time(NULL);
+    int n1 = 0;
+    int n2 = 1;
+    int n3 = 0;
 
     if (argc == 2) {
         __expire = atoi(argv[1]);
@@ -34,6 +36,9 @@ int main(int argc, char* argv[])
         if ((int)(time(NULL) - start_time) > __expire) {
             break;
         }
+        n3 = n2 + n1;
+        n1 = n2;
+        n2 = n3;
     }
 
 	return 0;
