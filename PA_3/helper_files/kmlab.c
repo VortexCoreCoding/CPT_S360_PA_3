@@ -3,6 +3,7 @@
 #include <linux/module.h>
 #include <linux/proc_fs.h>
 #include <linux/kernel.h>
+#include <linux/slab.h>
 #include <linux/uaccess.h> // for copy_from_user
 #include <linux/list.h>
 #include "kmlab_given.h"
@@ -21,8 +22,7 @@ typedef struct proc_node {
     unsigned long cpu_time;
 } proc_node;
 
-static proc_node *process_list;
-static struct list_head process_head;
+static LIST_HEAD(process_head);
 
 static struct proc_dir_entry *kmlab_dir;
 static struct proc_dir_entry *status_dir; 
@@ -32,6 +32,28 @@ static char procfs_buffer[MAX_PROCFS_SIZE];
 
 // The current size of the buffer (len of the str in buffer)
 static unsigned long procfs_buffer_size = 0;
+
+static void print_list(struct list_head* p_head) {
+   struct list_head* p_cur;
+   struct proc_node* e;
+   list_for_each(p_cur, p_head) {
+      e = list_entry(p_cur, struct proc_node, list);
+      pr_info("PID: %u-> CPU Time: %lu\n", e->pid, e->cpu_time);
+   }
+}
+
+// zero allocates space for the new node (erroring if not enough mem) and then instantiates it with the pid and adds it to the list
+static int add_process(unsigned int pid) {
+   proc_node *new_node = kzalloc(sizeof(*new_node), GFP_KERNEL);
+   if (!new_node) {
+      return -ENOMEM;
+   }
+   new_node->cpu_time = 0;
+   new_node->pid = pid;
+   list_add(&new_node->list, &process_head);
+   print_list(&process_head);
+   return 0;
+}
 
 // from linux kernel module tutorial book
 // reads data from procfile
@@ -80,41 +102,18 @@ static const struct proc_ops status_access_ops = {
    .proc_write = procfile_write,
 };
 
-// zero allocates space for the new node (erroring if not enough mem) and then instantiates it with the pid and adds it to the list
-static int add_process(unsigned int pid) {
-   proc_node *new_node = (proc_node*)kzalloc(sizeof(proc_node));
-   if (!new_node) {
-      return -ENOMEM;
-   }
-   new_node->cpu_time = 0;
-   new_node->pid = pid;
-   list_add(&new_node->list, &process_head);
-   print_list(&process_head);
-   return 0;
-}
-
-static void print_list(struct list_head* p_head) {
-   struct list_head* p_cur;
-   struct proc_node* e;
-   list_for_each(p_cur, p_head) {
-      e = list_entry(p_cur, struct proc_node, list);
-      kprint("PID: %u-> CPU Time: %u\n", e->pid, e->cpu_time);
-   }
-}
-
 static int remove_process(struct list_head* p_head, unsigned int pid) {
-   if (!list_empty(&process_list->list)) {
-      struct list_head* p_cur;
-      struct proc_node* e;
-      list_for_each(p_cur, p_head) {
-         e = list_entry(p_cur, struct proc_node, list);
-         if (e->pid == pid) break;
-      }
-      if (e->pid == pid) {
-         list_del(p_cur);
-         kfree(p_cur);
+   proc_node *node;
+   proc_node *next;
+
+   list_for_each_entry_safe(node, next, p_head, list) {
+      if (node->pid == pid) {
+         list_del(&node->list);
+         kfree(node);
+         return 0;
       }
    }
+   return -ESRCH;
 }
 
 static void update_list_cpu_time(struct list_head* p_head, unsigned long elapsed_time) {
@@ -140,14 +139,9 @@ int __init kmlab_init(void)
    }
    status_dir = proc_create("status", 0666, kmlab_dir, &status_access_ops);
    if (!status_dir) {
+      proc_remove(kmlab_dir);
+      kmlab_dir = NULL;
       return -ENOMEM;
-   }
-   process_list = (proc_node*)kmalloc(sizeof(proc_node));
-   if (!process_list) {
-      return -ENOMEM;
-   }
-   else {
-      INIT_LIST_HEAD(&process_head);
    }
 
    pr_info("KMLAB MODULE LOADED\n");
@@ -162,14 +156,21 @@ void __exit kmlab_exit(void)
    #endif
 
    // printk("Module unloaded successfully");
-   if (!status_dir) {
+   if (status_dir) {
       proc_remove(status_dir);
+      status_dir = NULL;
    }
-   if (!kmlab_dir) {
+   if (kmlab_dir) {
       proc_remove(kmlab_dir);
+      kmlab_dir = NULL;
    }
 
-
+   proc_node *node;
+   proc_node *next;
+   list_for_each_entry_safe(node, next, &process_head, list) {
+      list_del(&node->list);
+      kfree(node);
+   }
 
    pr_info("KMLAB MODULE UNLOADED\n");
 }
