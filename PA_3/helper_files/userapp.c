@@ -8,6 +8,7 @@
 // Register process with kernel module
 void register_process(unsigned int pid)
 {
+    // Opens procfile for writing and adds its pid to it
     FILE* process_file = fopen("/proc/kmlab/status", "w");
     if (!process_file) {
         printf("Error: Register failed, process file missing\n");
@@ -39,6 +40,7 @@ int main(int argc, char* argv[])
     }
     printf("\nPID %u reached value: %u\n==Processes==\n", getpid(), n1);
 
+    // Opens procfile for reading and prints each file status to the terminal
     FILE* process_file = fopen("/proc/kmlab/status", "r");
     if (!process_file) {
         return 1;

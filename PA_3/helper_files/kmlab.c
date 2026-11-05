@@ -52,6 +52,7 @@ static int add_process(unsigned int pid) {
    return 0;
 }
 
+// Prints the list to dmesg log for debugging purposes
 static void print_list(struct list_head *head) {
    proc_node *node;
 
@@ -86,6 +87,7 @@ static void cpu_time_work_handler(struct work_struct *task) {
 
 DECLARE_WORK(work_cpu_time, cpu_time_work_handler);
 
+// uses a seq_file (sequential file) to stream data from the kernel side to anywhere
 static int procfile_show(struct seq_file *seq, void *data) {
    proc_node *node;
 
@@ -97,10 +99,12 @@ static int procfile_show(struct seq_file *seq, void *data) {
    return 0;
 }
 
+// Called when the procfile is opened, returns a pointer to the file location
 static int procfile_open(struct inode *inode, struct file *file) {
    return single_open(file, procfile_show, NULL);
 }
 
+// Function for the timer wakeup, simply schedules the work and then resets the timer to 5 seconds
 static void wakeup(struct timer_list *t) {
    // queue_work(&wq, &work_cpu_time);
    if (!schedule_work(&work_cpu_time)) {
@@ -109,10 +113,12 @@ static void wakeup(struct timer_list *t) {
    mod_timer(t, jiffies + msecs_to_jiffies(5000)); // reset for loop
 }
 
+// Function to write to the procfile, called when using fprintf on the file.
+// Includes reading the pid instrinsically and converting to uint
 static ssize_t procfile_write(struct file *file, const char __user *usr_buffer,
                               size_t write_size, loff_t *offset) {
    unsigned int pid = 0;
-   char kernel_buffer[16];
+   char kernel_buffer[16]; // max len of pid
 
    if (!write_size || write_size >= sizeof(kernel_buffer)) {
       return -EINVAL;
@@ -139,10 +145,10 @@ static ssize_t procfile_write(struct file *file, const char __user *usr_buffer,
 
 static const struct proc_ops status_access_ops = {
    .proc_open = procfile_open,
-   .proc_read = seq_read,
+   .proc_read = seq_read, // connects the read action to the sequential file read used for show operation
    .proc_lseek = seq_lseek,
    .proc_release = single_release,
-   .proc_write = procfile_write,
+   .proc_write = procfile_write, // connects the write action to the procfile_write function that adds a PID to the list
 };
 
 
