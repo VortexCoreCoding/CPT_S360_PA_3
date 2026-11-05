@@ -188,7 +188,6 @@ void __exit kmlab_exit(void)
 
    del_timer_sync(&update_timer);
    cancel_work_sync(&work_cpu_time);
-   mutex_lock(&list_access_lock);
 
    // printk("Module unloaded successfully");
    if (status_dir) {
@@ -200,6 +199,7 @@ void __exit kmlab_exit(void)
       kmlab_dir = NULL;
    }
 
+   mutex_lock(&list_access_lock);
    list_for_each_entry_safe(node, next, &process_head, list) {
       list_del(&node->list);
       kfree(node);
