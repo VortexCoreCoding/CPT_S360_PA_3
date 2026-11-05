@@ -56,7 +56,7 @@ static void print_list(struct list_head *head) {
    proc_node *node;
 
    list_for_each_entry(node, head, list) {
-      pr_info("PID: %u -> CPU Time: %lu\n", node->pid, node->cpu_time);
+      pr_info("kmlab -> PID: %u -> CPU Time: %lu\n", node->pid, node->cpu_time);
    }
 }
 
@@ -180,6 +180,10 @@ void __exit kmlab_exit(void)
    pr_info("KMLAB MODULE UNLOADING\n");
    #endif
 
+   del_timer_sync(&update_timer);
+   cancel_work_sync(&work_cpu_time);
+   mutex_lock(&list_access_lock);
+
    // printk("Module unloaded successfully");
    if (status_dir) {
       proc_remove(status_dir);
@@ -190,9 +194,6 @@ void __exit kmlab_exit(void)
       kmlab_dir = NULL;
    }
 
-   del_timer_sync(&update_timer);
-   cancel_work_sync(&work_cpu_time);
-   mutex_lock(&list_access_lock);
    list_for_each_entry_safe(node, next, &process_head, list) {
       list_del(&node->list);
       kfree(node);

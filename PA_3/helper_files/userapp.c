@@ -1,4 +1,4 @@
-// The userspace test side of the module, runs a counter function for a maximum of argv[1] seconds
+// The userspace test side of the module, runs a counter function for a maximum of argv[1] seconds or 10 if no args
 #include "userapp.h"
 #include <stdio.h>
 #include <stdlib.h>
