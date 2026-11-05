@@ -1,4 +1,4 @@
-// The userspace test side of the module, runs a fibonacci function for a maximum of 15 seconds
+// The userspace test side of the module, runs a counter function for a maximum of argv[1] seconds
 #include "userapp.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,8 +23,6 @@ int main(int argc, char* argv[])
     int __expire = 10;
     time_t start_time = time(NULL);
     unsigned n1 = 0;
-    unsigned n2 = 1;
-    unsigned n3 = 0;
 
     if (argc == 2) {
         __expire = atoi(argv[1]);
@@ -37,13 +35,14 @@ int main(int argc, char* argv[])
         if ((int)(time(NULL) - start_time) > __expire) {
             break;
         }
-        n3 = n2 + n1;
-        n1 = n2;
-        n2 = n3;
+        n1++;
     }
-    printf("PID %u reached fib value: \n", getpid());
+    printf("\nPID %u reached value: %u\n==Processes==\n", getpid(), n1);
 
     FILE* process_file = fopen("/proc/kmlab/status", "r");
+    if (!process_file) {
+        return 1;
+    }
     char buff[200] = "";
     while(fgets(buff, 200, process_file)) {
         printf("%s\n", buff);
