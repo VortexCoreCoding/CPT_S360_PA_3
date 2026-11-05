@@ -8,7 +8,13 @@
 // Register process with kernel module
 void register_process(unsigned int pid)
 {
-    struct file* process_file = open("/proc/kmlab/status", O_RDONLY);
+    FILE* process_file = fopen("/proc/kmlab/status", "w");
+    if (!process_file) {
+        printf("Error: Register failed, process file missing\n");
+        return;
+    }
+    fprintf(process_file, "%u\n", pid);
+    fflush(process_file);
 }
 
 int main(int argc, char* argv[])

@@ -66,6 +66,12 @@ static ssize_t procfile_write(struct file *file, const char __user *usr_buffer,
    }
    *offset += write_size;
 
+   // from the usr buffer, read in the pid, add the process to the list
+   unsigned int pid = 0;
+   if (kstrtouint(usr_buffer, 10, &pid) == 0) {
+      add_process(pid);
+   }
+
    return write_size;
 }
 
@@ -108,6 +114,15 @@ static int remove_process(struct list_head* p_head, unsigned int pid) {
          list_del(p_cur);
          kfree(p_cur);
       }
+   }
+}
+
+static void update_list_cpu_time(struct list_head* p_head, unsigned long elapsed_time) {
+   struct list_head* p_cur;
+   struct proc_node* e;
+   list_for_each(p_cur, p_head) {
+      e = list_entry(p_cur, struct proc_node, list);
+      e->cpu_time += elapsed_time;
    }
 }
 
