@@ -6,6 +6,7 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h> // for copy_from_user
 #include <linux/list.h>
+#include <linux/seq_file.h>
 #include <linux/workqueue.h>
 #include <linux/timer.h>
 #include "kmlab_given.h"
@@ -16,6 +17,8 @@ MODULE_DESCRIPTION("CPTS360 PA_3 - KM");
 
 #define DEBUG 1
 #define MAX_PROCFS_SIZE 1024
+
+static DEFINE_MUTEX(list_access_lock);
 
 // store per process data (you may modify it as needed)
 typedef struct proc_node {
@@ -29,43 +32,8 @@ static LIST_HEAD(process_head);
 static struct proc_dir_entry *kmlab_dir;
 static struct proc_dir_entry *status_dir; 
 
-// The buffer used to store characters for proc file r/w
-static char procfs_buffer[MAX_PROCFS_SIZE];
-
-// The current size of the buffer (len of the str in buffer)
-static unsigned long procfs_buffer_size = 0;
-
 // Timer used for wakeup function
 static struct timer_list update_timer;
-
-// Loops through the list of nodes and increases the cpu time by the cpu use calculator in kmlab_given.h
-static void update_list_cpu_time(struct list_head* p_head) {
-   struct list_head* p_cur;
-   struct proc_node* e;
-   list_for_each(p_cur, p_head) {
-      e = list_entry(p_cur, struct proc_node, list);
-      if (get_cpu_use(e->pid, &e->cpu_time)) {
-         pr_info("Error in get_cpu_use() function\n");
-      }
-   }
-}
-
-static void cpu_time_work_handler(struct work_struct *task) {
-   update_list_cpu_time(&process_head);
-}
-
-DECLARE_WORK(work_cpu_time, cpu_time_work_handler);
-
-// Loops through the node list and prints pid and cpu time
-static void print_list(struct list_head* p_head) {
-   struct list_head* p_cur;
-   struct proc_node* e;
-   list_for_each(p_cur, p_head) {
-      e = list_entry(p_cur, struct proc_node, list);
-      pr_info("PID: %u -> CPU Time: %lu\n", e->pid, e->cpu_time);
-   }
-}
-
 
 // zero allocates space for the new node (erroring if not enough mem)
 // and then instantiates it with the pid and adds it to the list
@@ -77,13 +45,46 @@ static int add_process(unsigned int pid) {
    new_node->cpu_time = 0;
    new_node->pid = pid;
    list_add(&new_node->list, &process_head);
-   print_list(&process_head);
    return 0;
 }
 
+// Loops through the list of nodes and increases the cpu time by the cpu use calculator in kmlab_given.h
+static void update_list_cpu_time(struct list_head* p_head) {
+   proc_node *node;
+   proc_node *next;
+   mutex_lock(&list_access_lock);
+   list_for_each_entry_safe(node, next, p_head, list) {
+      if (get_cpu_use(node->pid, &node->cpu_time)) {
+         // remove a process if its id is not present or finished
+         list_del(&node->list);
+         kfree(node);
+      }
+   }
+   mutex_unlock(&list_access_lock);
+}
+
+static void cpu_time_work_handler(struct work_struct *task) {
+   update_list_cpu_time(&process_head);
+}
+
+DECLARE_WORK(work_cpu_time, cpu_time_work_handler);
+
+static int procfile_show(struct seq_file *seq, void *data) {
+   proc_node *node;
+
+   mutex_lock(&list_access_lock);
+   list_for_each_entry(node, &process_head, list) {
+      seq_printf(seq, "PID: %u -> CPU Time: %lu\n", node->pid, node->cpu_time);
+   }
+   mutex_unlock(&list_access_lock);
+   return 0;
+}
+
+static int procfile_open(struct inode *inode, struct file *file) {
+   return single_open(file, procfile_show, NULL);
+}
 
 static void wakeup(struct timer_list *t) {
-   pr_info("Timer up!\n");
    // queue_work(&wq, &work_cpu_time);
    if (schedule_work(&work_cpu_time)) {
       pr_info("Error: Duplicate work not added to queue\n");
@@ -91,69 +92,41 @@ static void wakeup(struct timer_list *t) {
    mod_timer(t, jiffies + msecs_to_jiffies(5000)); // reset for loop
 }
 
-// from linux kernel module tutorial book
-// reads data from procfile and returns to user
-// interfaces with fopen userspace function
-static ssize_t procfile_read(struct file *file, char __user *usr_buffer,
-                             size_t read_size, loff_t *offset) {
-   if (*offset >= procfs_buffer_size) {
-      return 0; // EOF symbol
-   }
-   if (*offset + read_size >= procfs_buffer_size) {
-      read_size = procfs_buffer_size - *offset;
-   }
-   if (copy_to_user(usr_buffer, procfs_buffer + *offset, read_size)) {
-      return -EFAULT; // bad address error
-   }
-   *offset += read_size; // update offset counter (current place in file)
-
-   return read_size;
-}
-
-// from linux kernel module tutorial book
-// writes data from usrbuffer to the file
-// interfaces with fopen userspace function
 static ssize_t procfile_write(struct file *file, const char __user *usr_buffer,
                               size_t write_size, loff_t *offset) {
    unsigned int pid = 0;
-   if (*offset >= MAX_PROCFS_SIZE) {
-      return -EFBIG; // files is too large error code
+   char kernel_buffer[16];
+
+   if (!write_size || write_size >= sizeof(kernel_buffer)) {
+      return -EINVAL;
    }
-   if (*offset + write_size >= MAX_PROCFS_SIZE) {
-      write_size = MAX_PROCFS_SIZE - *offset;
-   }
-   if (copy_from_user(procfs_buffer + *offset, usr_buffer, write_size)) {
+   if (copy_from_user(kernel_buffer, usr_buffer, write_size)) {
       return -EFAULT;
    }
-   *offset += write_size;
+   kernel_buffer[write_size] = '\0';
 
-   // from the usr buffer, read in the pid, add the process to the list
-   if (kstrtouint(usr_buffer, 10, &pid) == 0) {
-      add_process(pid);
+   if (kstrtouint(kernel_buffer, 10, &pid)) {
+      return -EINVAL;
    }
+
+   mutex_lock(&list_access_lock);
+   if (add_process(pid)) {
+      mutex_unlock(&list_access_lock);
+      return -ENOMEM;
+   }
+   mutex_unlock(&list_access_lock);
 
    return write_size;
 }
 
 static const struct proc_ops status_access_ops = {
-   .proc_read = procfile_read,
+   .proc_open = procfile_open,
+   .proc_read = seq_read,
+   .proc_lseek = seq_lseek,
+   .proc_release = single_release,
    .proc_write = procfile_write,
 };
 
-// Searches through the list for a matching pid and removes it, freeing the node
-static int remove_process(struct list_head* p_head, unsigned int pid) {
-   proc_node *node;
-   proc_node *next;
-
-   list_for_each_entry_safe(node, next, p_head, list) {
-      if (node->pid == pid) {
-         list_del(&node->list);
-         kfree(node);
-         return 0;
-      }
-   }
-   return -ESRCH;
-}
 
 // kmlab_init - Called when the module is loaded
 int __init kmlab_init(void)
@@ -199,10 +172,14 @@ void __exit kmlab_exit(void)
       kmlab_dir = NULL;
    }
 
+   del_timer_sync(&update_timer);
+   cancel_work_sync(&work_cpu_time);
+   mutex_lock(&list_access_lock);
    list_for_each_entry_safe(node, next, &process_head, list) {
       list_del(&node->list);
       kfree(node);
    }
+   mutex_unlock(&list_access_lock);
 
    pr_info("KMLAB MODULE UNLOADED\n");
 }
