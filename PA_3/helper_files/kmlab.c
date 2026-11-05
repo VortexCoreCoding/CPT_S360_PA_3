@@ -6,6 +6,8 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h> // for copy_from_user
 #include <linux/list.h>
+#include <linux/workqueue.h>
+#include <linux/timer.h>
 #include "kmlab_given.h"
 
 MODULE_LICENSE("GPL");
@@ -33,16 +35,40 @@ static char procfs_buffer[MAX_PROCFS_SIZE];
 // The current size of the buffer (len of the str in buffer)
 static unsigned long procfs_buffer_size = 0;
 
+// Timer used for wakeup function
+static struct timer_list update_timer;
+
+// Loops through the list of nodes and increases the cpu time by the cpu use calculator in kmlab_given.h
+static void update_list_cpu_time(struct list_head* p_head) {
+   struct list_head* p_cur;
+   struct proc_node* e;
+   list_for_each(p_cur, p_head) {
+      e = list_entry(p_cur, struct proc_node, list);
+      if (get_cpu_use(e->pid, &e->cpu_time)) {
+         pr_info("Error in get_cpu_use() function\n");
+      }
+   }
+}
+
+static void cpu_time_work_handler(struct work_struct *task) {
+   update_list_cpu_time(&process_head);
+}
+
+DECLARE_WORK(work_cpu_time, cpu_time_work_handler);
+
+// Loops through the node list and prints pid and cpu time
 static void print_list(struct list_head* p_head) {
    struct list_head* p_cur;
    struct proc_node* e;
    list_for_each(p_cur, p_head) {
       e = list_entry(p_cur, struct proc_node, list);
-      pr_info("PID: %u-> CPU Time: %lu\n", e->pid, e->cpu_time);
+      pr_info("PID: %u -> CPU Time: %lu\n", e->pid, e->cpu_time);
    }
 }
 
-// zero allocates space for the new node (erroring if not enough mem) and then instantiates it with the pid and adds it to the list
+
+// zero allocates space for the new node (erroring if not enough mem)
+// and then instantiates it with the pid and adds it to the list
 static int add_process(unsigned int pid) {
    proc_node *new_node = kzalloc(sizeof(*new_node), GFP_KERNEL);
    if (!new_node) {
@@ -55,8 +81,19 @@ static int add_process(unsigned int pid) {
    return 0;
 }
 
+
+static void wakeup(struct timer_list *t) {
+   pr_info("Timer up!\n");
+   // queue_work(&wq, &work_cpu_time);
+   if (schedule_work(&work_cpu_time)) {
+      pr_info("Error: Duplicate work not added to queue\n");
+   }
+   mod_timer(t, jiffies + msecs_to_jiffies(5000)); // reset for loop
+}
+
 // from linux kernel module tutorial book
-// reads data from procfile
+// reads data from procfile and returns to user
+// interfaces with fopen userspace function
 static ssize_t procfile_read(struct file *file, char __user *usr_buffer,
                              size_t read_size, loff_t *offset) {
    if (*offset >= procfs_buffer_size) {
@@ -74,27 +111,24 @@ static ssize_t procfile_read(struct file *file, char __user *usr_buffer,
 }
 
 // from linux kernel module tutorial book
-// overwrites current data in file
+// writes data from usrbuffer to the file
+// interfaces with fopen userspace function
 static ssize_t procfile_write(struct file *file, const char __user *usr_buffer,
                               size_t write_size, loff_t *offset) {
+   unsigned int pid = 0;
    if (*offset >= MAX_PROCFS_SIZE) {
-      pr_info("too large\n");
       return -EFBIG; // files is too large error code
    }
    if (*offset + write_size >= MAX_PROCFS_SIZE) {
-      pr_info("too large 2\n");
       write_size = MAX_PROCFS_SIZE - *offset;
    }
    if (copy_from_user(procfs_buffer + *offset, usr_buffer, write_size)) {
-      pr_info("error in copy\n");
       return -EFAULT;
    }
    *offset += write_size;
 
    // from the usr buffer, read in the pid, add the process to the list
-   unsigned int pid = 0;
    if (kstrtouint(usr_buffer, 10, &pid) == 0) {
-      pr_info("not uint\n");
       add_process(pid);
    }
 
@@ -106,6 +140,7 @@ static const struct proc_ops status_access_ops = {
    .proc_write = procfile_write,
 };
 
+// Searches through the list for a matching pid and removes it, freeing the node
 static int remove_process(struct list_head* p_head, unsigned int pid) {
    proc_node *node;
    proc_node *next;
@@ -118,15 +153,6 @@ static int remove_process(struct list_head* p_head, unsigned int pid) {
       }
    }
    return -ESRCH;
-}
-
-static void update_list_cpu_time(struct list_head* p_head, unsigned long elapsed_time) {
-   struct list_head* p_cur;
-   struct proc_node* e;
-   list_for_each(p_cur, p_head) {
-      e = list_entry(p_cur, struct proc_node, list);
-      e->cpu_time += elapsed_time;
-   }
 }
 
 // kmlab_init - Called when the module is loaded
@@ -148,6 +174,9 @@ int __init kmlab_init(void)
       return -ENOMEM;
    }
 
+   timer_setup(&update_timer, wakeup, 0);
+   mod_timer(&update_timer, jiffies + msecs_to_jiffies(5000));
+
    pr_info("KMLAB MODULE LOADED\n");
    return 0;   
 }
@@ -155,6 +184,7 @@ int __init kmlab_init(void)
 // kmlab_exit - Called when the module is unloaded
 void __exit kmlab_exit(void)
 {
+   proc_node *node, *next;
    #ifdef DEBUG
    pr_info("KMLAB MODULE UNLOADING\n");
    #endif
@@ -169,8 +199,6 @@ void __exit kmlab_exit(void)
       kmlab_dir = NULL;
    }
 
-   proc_node *node;
-   proc_node *next;
    list_for_each_entry_safe(node, next, &process_head, list) {
       list_del(&node->list);
       kfree(node);
