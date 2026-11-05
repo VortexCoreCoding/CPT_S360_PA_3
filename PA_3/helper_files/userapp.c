@@ -22,9 +22,9 @@ int main(int argc, char* argv[])
 {
     int __expire = 10;
     time_t start_time = time(NULL);
-    int n1 = 0;
-    int n2 = 1;
-    int n3 = 0;
+    unsigned n1 = 0;
+    unsigned n2 = 1;
+    unsigned n3 = 0;
 
     if (argc == 2) {
         __expire = atoi(argv[1]);
@@ -41,10 +41,11 @@ int main(int argc, char* argv[])
         n1 = n2;
         n2 = n3;
     }
+    printf("PID %u reached fib value: \n", getpid());
 
     FILE* process_file = fopen("/proc/kmlab/status", "r");
     char buff[200] = "";
-    while(fgets(process_file, 200, buff)) {
+    while(fgets(buff, 200, process_file)) {
         printf("%s\n", buff);
     }
 
