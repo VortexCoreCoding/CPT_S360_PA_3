@@ -58,17 +58,20 @@ static void print_list(struct list_head *head) {
 
 // Loops through the list of nodes and increases the cpu time by the cpu use calculator in kmlab_given.h
 static void update_list_cpu_time(struct list_head* p_head) {
+   if (list_empty(p_head)) {
+      return;
+   }
    proc_node *node;
    proc_node *next;
    mutex_lock(&list_access_lock);
    list_for_each_entry_safe(node, next, p_head, list) {
       if (get_cpu_use(node->pid, &node->cpu_time)) {
          // remove a process if its id is not present or finished
-         pr_info("Removed %u", node->pid);
          list_del(&node->list);
          kfree(node);
       }
    }
+   print_list(p_head);
    mutex_unlock(&list_access_lock);
 }
 
@@ -124,7 +127,6 @@ static ssize_t procfile_write(struct file *file, const char __user *usr_buffer,
       return -ENOMEM;
    }
       print_list(&process_head);
-   pr_info("Added %u", pid);
    mutex_unlock(&list_access_lock);
 
    return write_size;
