@@ -1,15 +1,14 @@
 #include "userapp.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <fcntl.h>
 // Additional headers as needed
 
 
 // Register process with kernel module
 void register_process(unsigned int pid)
 {
-    
-     // Insert your code here ...
-   
+    struct file* process_file = open("/proc/kmlab/status", O_RDONLY);
 }
 
 int main(int argc, char* argv[])
