@@ -77,13 +77,16 @@ static ssize_t procfile_read(struct file *file, char __user *usr_buffer,
 // overwrites current data in file
 static ssize_t procfile_write(struct file *file, const char __user *usr_buffer,
                               size_t write_size, loff_t *offset) {
-   if (*offset >= procfs_buffer_size) {
+   if (*offset >= MAX_PROCFS_SIZE) {
+      pr_info("too large\n");
       return -EFBIG; // files is too large error code
    }
    if (*offset + write_size >= MAX_PROCFS_SIZE) {
+      pr_info("too large 2\n");
       write_size = MAX_PROCFS_SIZE - *offset;
    }
    if (copy_from_user(procfs_buffer + *offset, usr_buffer, write_size)) {
+      pr_info("error in copy\n");
       return -EFAULT;
    }
    *offset += write_size;
@@ -91,6 +94,7 @@ static ssize_t procfile_write(struct file *file, const char __user *usr_buffer,
    // from the usr buffer, read in the pid, add the process to the list
    unsigned int pid = 0;
    if (kstrtouint(usr_buffer, 10, &pid) == 0) {
+      pr_info("not uint\n");
       add_process(pid);
    }
 
