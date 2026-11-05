@@ -15,6 +15,7 @@ void register_process(unsigned int pid)
     }
     fprintf(process_file, "%u\n", pid);
     fflush(process_file);
+    fclose(process_file);
 }
 
 int main(int argc, char* argv[])
@@ -39,6 +40,12 @@ int main(int argc, char* argv[])
         n3 = n2 + n1;
         n1 = n2;
         n2 = n3;
+    }
+
+    FILE* process_file = fopen("/proc/kmlab/status", "r");
+    char buff[200] = "";
+    while(fgets(process_file, 200, buff)) {
+        printf("%s\n", buff);
     }
 
 	return 0;
