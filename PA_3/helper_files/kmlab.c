@@ -48,6 +48,14 @@ static int add_process(unsigned int pid) {
    return 0;
 }
 
+static void print_list(struct list_head *head) {
+   proc_node *node;
+
+   list_for_each_entry(node, head, list) {
+      pr_info("PID: %u -> CPU Time: %lu\n", node->pid, node->cpu_time);
+   }
+}
+
 // Loops through the list of nodes and increases the cpu time by the cpu use calculator in kmlab_given.h
 static void update_list_cpu_time(struct list_head* p_head) {
    proc_node *node;
@@ -56,6 +64,7 @@ static void update_list_cpu_time(struct list_head* p_head) {
    list_for_each_entry_safe(node, next, p_head, list) {
       if (get_cpu_use(node->pid, &node->cpu_time)) {
          // remove a process if its id is not present or finished
+         pr_info("Removed %u", node->pid);
          list_del(&node->list);
          kfree(node);
       }
@@ -86,7 +95,7 @@ static int procfile_open(struct inode *inode, struct file *file) {
 
 static void wakeup(struct timer_list *t) {
    // queue_work(&wq, &work_cpu_time);
-   if (schedule_work(&work_cpu_time)) {
+   if (!schedule_work(&work_cpu_time)) {
       pr_info("Error: Duplicate work not added to queue\n");
    }
    mod_timer(t, jiffies + msecs_to_jiffies(5000)); // reset for loop
@@ -114,6 +123,8 @@ static ssize_t procfile_write(struct file *file, const char __user *usr_buffer,
       mutex_unlock(&list_access_lock);
       return -ENOMEM;
    }
+      print_list(&process_head);
+   pr_info("Added %u", pid);
    mutex_unlock(&list_access_lock);
 
    return write_size;
